@@ -1,0 +1,46 @@
+{
+    "path": "D:/programming/mc/server/",
+    "jar": "minecraft_server.jar",
+    "world": "world",
+    "restartDelay": 10800000,
+    "reserveSlots": true,
+    "games": [{
+            "name": "Arena",
+            "path": "arena",
+            "spawn": "-295 56 931",
+            "color": "green"
+        }],
+    "help": [[{
+                "text": "Colors: ",
+                "color": "white"
+            }, {
+                "text": "admin",
+                "color": "gold"
+            }, {
+                "text": ", ",
+                "color": "white"
+            }, {
+                "text": "VIP",
+                "color": "green"
+            }, {
+                "text": ", ",
+                "color": "white"
+            }, {
+                "text": "player at spawn",
+                "color": "gray"
+            }, {
+                "text": ", ",
+                "color": "white"
+            }, {
+                "text": "clickable text",
+                "color": "yellow"
+            }]
+    ],
+    "rules": [[{
+                "text": "1. First line of rules",
+                "color": "white"
+            }], [{
+                "text": "2. Second line of rules",
+                "color": "white"
+            }]]
+}
