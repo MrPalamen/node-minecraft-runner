@@ -20,6 +20,7 @@ var restart, restartTimeout, restarting, // various restart info
         serverProps = {},
         requests = {}, // active tp requests
         userDB = {}, // user databse
+        bannedDB, // a cache of banned users
         gameVotes = {}; // votes for game change
 
 // declaring callback for server start
@@ -105,6 +106,13 @@ changeGroup = function(player, user, newGroup) {
     } else {
         game.tellError(player, 'The player already in that group.');
     }
+};
+
+getBannedDB = function() {
+    if (typeof bannedDB === 'undefined') {
+        bannedDB = JSON.parse(fs.readFileSync(config.path + 'banned-players.json', 'utf8'));
+    }
+    return bannedDB;
 };
 
 // declare commands
@@ -272,6 +280,7 @@ var commands = {
     restart: {
         groups: ['admin'],
         text: 'Restart the server.',
+        args: '[<game name>]',
         handler: function(player, extra) {
             if (extra) {
                 extra = extra.toLowerCase();
@@ -419,7 +428,6 @@ var commands = {
                 if (game.players.indexOf(user) !== -1) {
                     if (getUser(user).group !== 'admin') {
                         game.command('ban', user, reason);
-                        Utils.tellAchievement(game, user, 'banhammered');
                     } else {
                         game.tellError(player, 'Cannot ban an admin.');
                     }
@@ -434,7 +442,7 @@ var commands = {
     game: {
         groups: allGroups,
         text: 'Game commands.',
-        args: 'change/list',
+        args: 'list|change|vote <game index>',
         handler: function(player, extra) {
             if (extra) {
                 extra = extra.toLowerCase().split(' ');
@@ -640,7 +648,7 @@ var commands = {
     status: {
         groups: ['admin'],
         text: 'Show player/players status.',
-        args: '[player]',
+        args: '[<player>]',
         handler: function(player, extra) {
             if (extra) {
                 if (game.players.indexOf(extra) !== -1) {
@@ -745,9 +753,42 @@ game.on('joined', function(player, opts) {
     // check sources
     var pattern = /^\/(.+):(\d+)$/, match = opts.source.match(pattern);
     if (match) {
-        if (dbPlayer.sources.indexOf(match[1]) === -1) {
-            dbPlayer.sources.push(match[1]);
+        var source = match[1];
+        if (dbPlayer.sources.indexOf(source) === -1) {
+            dbPlayer.sources.push(source);
             saveUsers();
+        }
+        // check if users from this ip were banned and inform admins
+        var userList = [];
+        for (var user in userDB) {
+            if (user !== player && userDB.hasOwnProperty(user) && userDB[user].sources.indexOf(source)) {
+                userList.push(userDB[user].UUID);
+            }
+        }
+        if (userList.length > 0) {
+            var bannedList = [];
+            // we found other names of our user. let's check if they have bans
+            getBannedDB().forEach(function(item) {
+                if (userList.indexOf(item.UUID)) {
+                    bannedList.push(item.name);
+                }
+            });
+            if (bannedList.length > 0) {
+                game.tellRaw('@a[score_admin_min=1]', [{
+                        text: 'Possible banned alts of ',
+                        color: 'gold'
+                    }, {
+                        text: player,
+                        color: 'yellow',
+                        clickEvent: {
+                            action: 'suggest_command',
+                            value: '/ban ' + player + ' Ban alternative account.'
+                        }
+                    }, {
+                        text: ': ' + bannedList.join(', '),
+                        color: 'gold'
+                    }]);
+            }
         }
     }
     return true;
@@ -759,7 +800,7 @@ game.on('authenticated', function(player, UUID) {
         dbUser.UUID = UUID;
         saveUsers();
     }
-    // check for slots        
+    // check for slots
     if ((dbUser.group !== 'default') && config.reserveSlots && (game.players.length >= serverProps['max-players'])) {
         // we need to kick someone
         game.players.every(function(item) {
@@ -771,6 +812,18 @@ game.on('authenticated', function(player, UUID) {
                 return true;
         });
     }
+});
+
+game.on('banned', function(source, player) {
+    // clear cache
+    bannedDB = undefined;
+    // inform the auditory
+    Utils.tellAchievement(game, player, 'Banhammered');
+});
+
+game.on('unbanned', function() {
+    // clear cache
+    bannedDB = undefined;
 });
 
 game.on('log', function(meta) {
@@ -797,7 +850,6 @@ game.on('log', function(meta) {
                                     game.tellRaw(player, [{text: 'Don\'t spam!', color: 'white'}]);
                                 } else {
                                     game.command('ban', player, 'Automatic ban for spamming.');
-                                    Utils.tellAchievement(game, player, 'banhammered');
                                 }
                             }
                         } else {
@@ -840,8 +892,15 @@ game.on('log', function(meta) {
                             dbPlayer.cheatScore = item.score;
                         }
                         game.tellRaw('@a[score_admin_min=1]', [{
-                                text: player + ' cheat score = ' + dbPlayer.cheatScore,
-                                color: 'gray'
+                                text: player,
+                                color: 'yellow',
+                                clickEvent: {
+                                    action: 'suggest_command',
+                                    value: '/ban ' + player + ' Ban for cheating.'
+                                }
+                            }, {
+                                text: ' cheat score = ' + dbPlayer.cheatScore,
+                                color: 'gold'
                             }]);
                         saveUsers();
                         if (dbPlayer.cheatScore >= 15) {
@@ -849,7 +908,6 @@ game.on('log', function(meta) {
                                 game.tellRaw(player, [{text: 'Don\'t cheat!', color: 'white'}]);
                             } else {
                                 game.command('ban', player, 'Automatic ban for cheating.');
-                                Utils.tellAchievement(game, player, 'banhammered');
                             }
                         }
                         return false;
@@ -883,6 +941,7 @@ game.on('start', function() {
         userDB = JSON.parse(fs.readFileSync(userFile, 'utf8'));
     }
     // initialize variables
+    bannedDB = undefined;
     serverProps = Properties.parse(fs.readFileSync(config.path + 'server.properties', 'utf8'));
     requests = {};
     gameVotes = {

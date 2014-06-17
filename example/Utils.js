@@ -19,7 +19,7 @@ exports.tellAchievement = function(game, player, achievement) {
             text: player + ' has just earned the achievement: ',
             color: 'white'
         }, {
-            text: '[' + achievement.toUpperCase() + '!]',
+            text: '[' + achievement + '!]',
             color: 'green'
         }]);
 };
