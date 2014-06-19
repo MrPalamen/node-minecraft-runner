@@ -1,25 +1,25 @@
 var fs = require('fs-extra');
 var Game = require("minecraft-runner");
-var Utils = require("./Utils");
 var colors = require('colors');
 var Properties = require("minecraft-server-properties");
 var Query = require("mcquery");
+var Utils = require("./Utils");
+var UserDB = require("./UserDB");
 
 
 // global variables
 var configFile = __dirname + '/config.json';
-var userFile = __dirname + '/users.json';
 var allGroups = ['default', 'vip', 'mod', 'admin'];
 
 // reading a config file and actual start code
 var config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-
 var game = new Game(config.path, config.path + config.jar);
+var userDB = new UserDB(__dirname);
+
 var restart, restartTimeout, restarting, // various restart info
         currentGame, newGame, // currentGame contains infotmation about active game, newGame is set during the restart
         serverProps = {},
         requests = {}, // active tp requests
-        userDB = {}, // user databse
         bannedDB, // a cache of banned users
         gameVotes = {}; // votes for game change
 
@@ -57,54 +57,34 @@ var restart = function(game, cfg) {
     }
 };
 
-saveUsers = function() {
-    fs.writeFileSync(userFile, JSON.stringify(userDB), 'utf8');
-};
-
-getUser = function(player) {
-    var dbPlayer = userDB[player];
-    if (typeof dbPlayer === 'undefined') {
-        dbPlayer = {
-            UUID: '',
-            group: 'default',
-            sources: [],
-            lastMessageTime: 0,
-            lastCheatDate: 0,
-            spamScore: 0,
-            cheatScore: 0
-        };
-        userDB[player] = dbPlayer;
-    }
-    return dbPlayer;
-};
-
 playerInGroup = function(player, groups) {
     // check for all group rights
-    var dbPlayer = getUser(player);
+    var dbPlayer = userDB.getByName(player);
     return groups.indexOf(dbPlayer.group) !== -1;
 };
 
-changeGroup = function(player, user, newGroup) {
-    var dbPlayer = getUser(user);
+changeGroup = function(player, user, newGroup, force) {
+    var dbPlayer = userDB.getByName(user);
     if (dbPlayer.group !== newGroup) {
-        if (dbPlayer.group !== 'admin') {
+        if (force || (dbPlayer.group !== 'admin')) {
             // do db changes
+            var oldGroup = dbPlayer.group;
             dbPlayer.group = newGroup;
-            saveUsers();
+            userDB.save();
             // do in game changes
-            // clear all groups
-            allGroups.forEach(function(item) {
-                if (item !== dbPlayer.group) {
-                    game.command('scoreboard players set', user, item + ' 0');
-                }
-            });
+            // clear old group
+            game.command('scoreboard players set', user, oldGroup + ' 0');
             game.command('scoreboard players set', user, dbPlayer.group + ' 1');
-            Utils.tellAchievement(game, user, dbPlayer.group);
+            Utils.tellAchievement(game, user, dbPlayer.group.toUpperCase());
         } else {
-            game.tellError(player, 'Cannot change administrator player group.');
+            if (player) {
+                game.tellError(player, 'Cannot change administrator player group.');
+            }
         }
     } else {
-        game.tellError(player, 'The player already in that group.');
+        if (player) {
+            game.tellError(player, 'The player already in that group.');
+        }
     }
 };
 
@@ -353,22 +333,6 @@ var commands = {
             }
         }
     },
-    admin: {
-        groups: ['admin'],
-        text: 'Make <player> an administrator.',
-        args: '<player>',
-        handler: function(player, extra) {
-            if (extra) {
-                if (game.players.indexOf(extra) !== -1) {
-                    changeGroup(player, extra, 'admin');
-                } else {
-                    game.tellError(player, 'That player cannot be found.');
-                }
-            } else {
-                game.tellRaw(player, [{text: 'Usage: .admin <player>', color: 'white'}]);
-            }
-        }
-    },
     demote: {
         groups: ['admin'],
         text: 'Remove <player> from all groups.',
@@ -399,7 +363,7 @@ var commands = {
                     user = extra;
                 }
                 if (game.players.indexOf(user) !== -1) {
-                    if (getUser(user).group !== 'admin') {
+                    if (userDB.getByName(user).group !== 'admin') {
                         game.command('kick', user, reason);
                     } else {
                         game.tellError(player, 'Cannot kick an admin.');
@@ -426,7 +390,7 @@ var commands = {
                     user = extra;
                 }
                 if (game.players.indexOf(user) !== -1) {
-                    if (getUser(user).group !== 'admin') {
+                    if (userDB.getByName(user).group !== 'admin') {
                         game.command('ban', user, reason);
                     } else {
                         game.tellError(player, 'Cannot ban an admin.');
@@ -482,7 +446,7 @@ var commands = {
                                 var votes = gameVotes.votes;
                                 for (var vote in votes) {
                                     if (votes.hasOwnProperty(vote) && game.players.indexOf(vote) !== -1) {
-                                        switch (getUser(vote).group) {
+                                        switch (userDB.getByName(vote).group) {
                                             case 'vip':
                                                 scores[votes[vote]] += 2; // vips have 2 votes
                                                 break;
@@ -652,7 +616,7 @@ var commands = {
         handler: function(player, extra) {
             if (extra) {
                 if (game.players.indexOf(extra) !== -1) {
-                    var dbPlayer = getUser(extra);
+                    var dbPlayer = userDB.getByName(extra);
                     game.tellRaw(player, [{
                             text: 'UUID: ' + dbPlayer.UUID,
                             color: 'white'
@@ -683,7 +647,7 @@ var commands = {
                     groups[item] = 0;
                 });
                 game.players.forEach(function(item) {
-                    user = getUser(item);
+                    user = userDB.getByName(item);
                     groups[user.group]++;
                     if (user.cheatScore > 0) {
                         cheaters.push(item);
@@ -747,7 +711,7 @@ game.on('joined', function(player, opts) {
             color: currentGame.color || 'white'
         }]);
 
-    var dbPlayer = getUser(player);
+    var dbPlayer = userDB.getByName(player);
     // restore group
     game.command('scoreboard', 'players set ' + player + ' ' + dbPlayer.group + ' 1');
     // check sources
@@ -756,15 +720,10 @@ game.on('joined', function(player, opts) {
         var source = match[1];
         if (dbPlayer.sources.indexOf(source) === -1) {
             dbPlayer.sources.push(source);
-            saveUsers();
+            userDB.save();
         }
         // check if users from this ip were banned and inform admins
-        var userList = [];
-        for (var user in userDB) {
-            if (user !== player && userDB.hasOwnProperty(user) && userDB[user].sources.indexOf(source)) {
-                userList.push(userDB[user].UUID);
-            }
-        }
+        var userList = userDB.getUsersWithSource(source, 'UUID');
         if (userList.length > 0) {
             var bannedList = [];
             // we found other names of our user. let's check if they have bans
@@ -795,16 +754,16 @@ game.on('joined', function(player, opts) {
 });
 
 game.on('authenticated', function(player, UUID) {
-    var dbUser = getUser(player);
+    var dbUser = userDB.getByName(player);
     if (dbUser.UUID !== UUID) {
         dbUser.UUID = UUID;
-        saveUsers();
+        userDB.save();
     }
     // check for slots
     if ((dbUser.group !== 'default') && config.reserveSlots && (game.players.length >= serverProps['max-players'])) {
         // we need to kick someone
         game.players.every(function(item) {
-            var user = getUser(item);
+            var user = userDB.getByName(item);
             if (user.group === 'default') {
                 game.command('kick', item, 'You have been kicked to make a room for a VIP!');
                 return false;
@@ -826,6 +785,14 @@ game.on('unbanned', function() {
     bannedDB = undefined;
 });
 
+game.on('opped', function(source, player) {
+    changeGroup(source, player, 'admin', true);
+});
+
+game.on('deopped', function(source, player) {
+    changeGroup(source, player, 'default', true);
+});
+
 game.on('log', function(meta) {
     // output to console log
     if (meta.source) {
@@ -841,7 +808,7 @@ game.on('log', function(meta) {
                     var pattern = /^<(.+)>\s(\.)?([\w]+)\s*(.+)?$/,
                             match = meta.text.match(pattern);
                     if (match) {
-                        var player = game.removeFormatting(match[1]), dbPlayer = getUser(player);
+                        var player = game.removeFormatting(match[1]), dbPlayer = userDB.getByName(player);
                         var curTime = Date.now();
                         if (curTime - dbPlayer.lastMessageTime <= 1500) {
                             dbPlayer.spamScore++;
@@ -882,7 +849,7 @@ game.on('log', function(meta) {
                     var match = meta.text.match(item.pattern);
                     if (match) {
                         //Utils.tellError(game, match[0], 'I know you are cheating.');
-                        var player = match[1], dbPlayer = getUser(player);
+                        var player = match[1], dbPlayer = userDB.getByName(player);
                         var curDate = new Date();
                         curDate.setHours(0, 0, 0, 0);
                         if (dbPlayer.lastCheatDate === curDate.valueOf()) {
@@ -902,7 +869,7 @@ game.on('log', function(meta) {
                                 text: ' cheat score = ' + dbPlayer.cheatScore,
                                 color: 'gold'
                             }]);
-                        saveUsers();
+                        userDB.save();
                         if (dbPlayer.cheatScore >= 15) {
                             if (playerInGroup(player, ['mod', 'admin'])) {
                                 game.tellRaw(player, [{text: 'Don\'t cheat!', color: 'white'}]);
@@ -937,9 +904,7 @@ game.on('start', function() {
     console.log(colors.green('Restoring ' + currentGame.name + ' files'));
     Utils.copyDirectory(__dirname + '/backup/' + currentGame.path, config.path + config.world);
     // load user database
-    if (fs.existsSync(userFile)) {
-        userDB = JSON.parse(fs.readFileSync(userFile, 'utf8'));
-    }
+    userDB.load();
     // initialize variables
     bannedDB = undefined;
     serverProps = Properties.parse(fs.readFileSync(config.path + 'server.properties', 'utf8'));
@@ -959,7 +924,7 @@ game.on('started', function() {
 });
 
 game.on('stopped', function() {
-    saveUsers();
+    userDB.save();
 });
 
 // start the game
