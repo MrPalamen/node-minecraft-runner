@@ -120,8 +120,13 @@ game.say("Hello World!");
  - **java (msg)** - a java exception (usually outside the minecraft game itself)
  - **log (meta)** - emitted any time a log is detected from the server
  - **version (name)** - emitted when the server reports the version of the jar being used
+ - **authenticated (name, UUID)** - emitted when user authenticator reports the UUID of a player
  - **joined (name, details)** - emitted after a player joins the server
  - **left (name, reason)** - emitted after a player leaves the server
+ - **banned (source, name)** - emitted when server reports about bannin of a player
+ - **unbanned (source, name)** - emitted when server reports about unbanning of a player
+ - **opped (source, name)** - emitted when server reports about opping of a player
+ - **deopped (source, name)** - emitted when server reports about de-opping of a player
  - **saveoff** - emitted after the server reports it has stopped auto-saving (in response to `save-off` command)
  - **saveon** - emitted after the server reports it has resumed auto-saving (in response to `save-on` command)
  - **saved** - emitted after the server reports it has finished saving (in response to `save-all` command)
