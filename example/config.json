@@ -2,7 +2,8 @@
     "path": "D:/programming/mc/server/",
     "jar": "minecraft_server.jar",
     "world": "world",
-    "restartDelay": 10800000,
+    "restartInterval": 10800000,
+    "tipsInterval": 600000,
     "reserveSlots": true,
     "games": [{
             "name": "Arena",
@@ -41,6 +42,20 @@
                 "color": "white"
             }], [{
                 "text": "2. Second line of rules",
+                "color": "white"
+            }]],
+   "tips": [[{
+                "text": "Stuck at arena? Use ",
+                "color": "white"
+            }, {
+                "text": ".spawn",
+                "color": "yellow",
+                "clickEvent": {
+                    "action": "suggest_command",
+                    "value": ".spawn"
+                }
+            }, {
+                "text": " to leave it.",
                 "color": "white"
             }]]
 }
