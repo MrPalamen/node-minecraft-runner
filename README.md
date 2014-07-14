@@ -25,6 +25,8 @@ The constructor will create an object representing a file on disk.
  * options - A hash of additional properties for the object (just extended to this)
     * java - The path to the `java` executable (default: `"java"`)
     * ram - The java command arguments: `-Xms{ram} -Xmx{ram}` (default: `"1G"`)
+    * log4j - The log4j configuration file
+    * classpath - Extra classpath to pass to java executable (can be needed for logging to a database)
 
 ```javascript
 var game = new Game("/path/to/server", "/path/to/jar");
