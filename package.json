@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "lodash": "~1.0",
-    "nop": "0.0.0"
+    "nop": "0.0.0",
+    "byline": "~4.0"
   }
 }
