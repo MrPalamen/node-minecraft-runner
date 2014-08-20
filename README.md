@@ -130,6 +130,7 @@ game.say("Hello World!");
  - **opped (source, name)** - emitted when server reports about opping of a player
  - **deopped (source, name)** - emitted when server reports about de-opping of a player
  - **scored (source, name, objective, score)** - emitted when server reports about score change of a player objective
+ - **killed (killed, killer, weapon)** - emitted when server reports about user kill by weapon
  - **message (name, text)** - emitted when server reports about player message (player name can contain formatting, so removeFormatting() is needed)
  - **saveoff** - emitted after the server reports it has stopped auto-saving (in response to `save-off` command)
  - **saveon** - emitted after the server reports it has resumed auto-saving (in response to `save-on` command)
