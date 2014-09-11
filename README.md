@@ -117,6 +117,7 @@ game.say("Hello World!");
  - **start** - emitted before a server has started
  - **started** - emitted after a server has finished starting
  - **stop** - emitted before stopping the server
+ - **stopping** - emitted when server started the stop sequence
  - **stopped** - emitted after the server has finished stopping
  - **error (err)** - triggered by an error in the server (via log) or from a java exception
  - **java (msg)** - a java exception (usually outside the minecraft game itself)
